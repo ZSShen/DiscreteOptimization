@@ -23,6 +23,12 @@ struct Item {
 class BranchAndBound {
 public:
     BranchAndBound(const std::string& fileName);
+    ~BranchAndBound() = default;
+
+    BranchAndBound(const BranchAndBound&) = delete;
+    BranchAndBound(BranchAndBound&&) = delete;
+    BranchAndBound& operator=(const BranchAndBound&) = delete;
+    BranchAndBound& operator=(BranchAndBound&&) = delete;
 
 public:
     void run(int depth);
