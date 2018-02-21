@@ -9,6 +9,12 @@
 class Greedy {
 public:
     Greedy(const std::string& fileName);
+    ~Greedy() = default;
+
+    Greedy(const Greedy&) = delete;
+    Greedy(Greedy&&) = delete;
+    Greedy& operator=(const Greedy&) = delete;
+    Greedy& operator=(Greedy&&) = delete;
 
 public:
     void run();
