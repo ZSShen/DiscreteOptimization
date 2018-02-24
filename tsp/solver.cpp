@@ -3,8 +3,7 @@
 #include <fstream>
 #include <string>
 #include <vector>
-#include <queue>
-#include <algorithm>
+#include <cmath>
 
 
 class TwoOpt {
@@ -54,9 +53,9 @@ TwoOpt::TwoOpt(const std::string& fileName) {
 
     for (int i = 0 ; i < numNode_ ; ++i) {
         for (int j = i + 1 ; j < numNode_ ; ++j) {
-            double xSqr = std::pow(map_[j].first - map_[i].first, 2);
-            double ySqr = std::pow(map_[j].second - map_[i].second, 2);
-            distance_[i][j] = distance_[j][i] = std::sqrt(xSqr + ySqr);
+            double xSqr = pow(map_[j].first - map_[i].first, 2);
+            double ySqr = pow(map_[j].second - map_[i].second, 2);
+            distance_[i][j] = distance_[j][i] = sqrt(xSqr + ySqr);
         }
     }
 
