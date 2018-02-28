@@ -27,10 +27,11 @@ public:
 
     void insert(int key) {
         if (size_ == capacity_) {
-            auto item = queue_.top();
-            queue_.pop();
-            set_.erase(item);
-            --size_;
+            while (!queue_.empty()) {
+                queue_.pop();
+            }
+            set_.clear();
+            size_ = 0;
         }
 
         queue_.push(key);
@@ -49,7 +50,11 @@ private:
 
 class TwoOpt {
 public:
-    TwoOpt(const std::string& fileName, double biasRate, int dropRate);
+    TwoOpt(const std::string& fileName,
+           double errorRate,
+           int dropRate,
+           int maxRound);
+
     ~TwoOpt() = default;
 
     TwoOpt(const TwoOpt&) = delete;
@@ -60,7 +65,7 @@ public:
 public:
     void run();
     std::pair<double, std::vector<int>> getAnswer() {
-        return make_pair(optTourLen_, optTour_);
+        return make_pair(ansTourLen_, ansTour_);
     }
 
 private:
@@ -70,8 +75,9 @@ private:
     int numNode_;
     int numTrial_;
 
-    double biasRate_;
+    double errorRate_;
     int dropRate_;
+    int maxRound_;
 
     double ansTourLen_;
     double optTourLen_;
@@ -86,8 +92,14 @@ private:
 };
 
 
-TwoOpt::TwoOpt(const std::string& fileName, double biasRate, int dropRate)
-    : numTrial_(1), biasRate_(biasRate), dropRate_(dropRate) {
+TwoOpt::TwoOpt(const std::string& fileName,
+               double errorRate,
+               int dropRate,
+               int maxRound)
+    :   numTrial_(1),
+        errorRate_(errorRate),
+        dropRate_(dropRate),
+        maxRound_(maxRound) {
 
     std::ifstream input(fileName);
     input >> numNode_;
@@ -129,6 +141,7 @@ void TwoOpt::run() {
     srand(time(NULL));
 
     int numFail = 0;
+    int numRound = 0;
     TabuList tabu(numNode_ * 100);
 
     while (true) {
@@ -136,7 +149,15 @@ void TwoOpt::run() {
         for (int i = 1 ; i < numNode_ - 3 ; ++i) {
             for (int j = i + 1 ; j < numNode_ ; ++j) {
 
+                ++numRound;
+                if (numRound == maxRound_) {
+                    return;
+                }
+
                 swapEdge(i, j);
+
+                // Use Tabu list to gradually reduce the upper bound of
+                // tour length found in each round.
                 if (tabu.find(curTourLen_)) {
                     continue;
                 }
@@ -150,12 +171,20 @@ void TwoOpt::run() {
                         ansTour_ = curTour_;
                     }
 
+#ifdef DEBUG
+                    std::cout.precision(16);
+                    std::cout << curTourLen_ << std::endl;
+#endif
+
                     numFail = 0;
                     continue;
                 }
 
+                // If the current tour is not better than the local optimal,
+                // we adopt Simulated Annealing to reheat the local search
+                // with carefully crafted parameters.
                 double diff = curTourLen_ - optTourLen_;
-                if (diff / optTourLen_ < biasRate_) {
+                if (diff / optTourLen_ < errorRate_) {
                     auto pick = rand() % dropRate_;
                     if (pick == 1) {
                         optTourLen_ = curTourLen_;
@@ -168,7 +197,7 @@ void TwoOpt::run() {
                 tabu.insert(curTourLen_);
 
                 ++numFail;
-                if (numFail == numNode_ * numNode_) {
+                if (numFail == numNode_ * 10) {
                     return;
                 }
             }
@@ -201,21 +230,26 @@ void TwoOpt::swapEdge(int k, int h) {
 
 int main(int argc, char** argv) {
 
-    if (argc != 4) {
-        std::cerr << "Please specify the input data path, bias rate, and random drop rate" << std::endl;
+    if (argc != 5) {
+        std::cerr << "Please specify: "
+                     "INPUT_PATH, "
+                     "ERROR_RATE, "
+                     "RANDOM_DROP_RATE, "
+                     "MAX_ROUND" << std::endl;
         return -1;
     }
 
     std::string fileName(argv[1]);
-    double biasRate = atof(argv[2]);
+    double errorRate = atof(argv[2]);
     int dropRate = atoi(argv[3]);
+    int maxRound = atoi(argv[4]);
 
-    TwoOpt solver(fileName, biasRate, dropRate);
+    TwoOpt solver(fileName, errorRate, dropRate, maxRound);
     solver.run();
 
     auto pair = solver.getAnswer();
-    std::cout.precision(4);
-    std::cout << pair.first << std::endl;
+    std::cout.precision(16);
+    std::cout << pair.first << " 0" << std::endl;
     for (int i = 0 ; i < pair.second.size() - 1; ++i) {
         std::cout << pair.second[i] << ' ';
     }

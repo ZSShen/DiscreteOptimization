@@ -41,7 +41,7 @@ submitt_url = \
     'https://www.coursera.org/api/onDemandProgrammingScriptSubmissions.v1'
 
 Metadata = namedtuple("Metadata", ['assignment_key', 'name', 'part_data'])
-Part = namedtuple("Part", ['id', 'input_file', 'solver_file', 'name'])
+Part = namedtuple("Part", ['id', 'input_file', 'solver_file', 'error_rate', 'drop_rate', 'max_round', 'name'])
 
 
 def load_metadata(metadata_file_name='_coursera'):
@@ -68,7 +68,7 @@ def load_metadata(metadata_file_name='_coursera'):
                 if ',' in line:
                     line_parts = line.split(',')
                     line_parts = [x.strip() for x in line_parts]
-                    assert(len(line_parts) == 4)
+                    assert(len(line_parts) == 7)
                     part_data.append(Part(*line_parts))
             if len(url) <= 0:
                 print('Empty url in _coursera file: %s' % metadata_file_name)
@@ -87,7 +87,7 @@ def load_metadata(metadata_file_name='_coursera'):
 
 def part_prompt(problems):
     '''
-    Prompts the user for which parts of the assignment they would like to 
+    Prompts the user for which parts of the assignment they would like to
     submit.
 
     Args:
@@ -140,7 +140,7 @@ def compute(metadata, solver_file_override=None):
 
     Args:
         metadata:  the assignment metadata
-        solver_file_override:  an optional model file to override the metadata 
+        solver_file_override:  an optional model file to override the metadata
             default
 
     Returns:
@@ -162,7 +162,7 @@ def compute(metadata, solver_file_override=None):
             solver_file = solver_file_override
         else:
             solver_file = problem.solver_file
-        
+
         if not os.path.isfile(solver_file):
             print('Unable to locate assignment file "%s" in the current working directory.' % solver_file)
             continue
@@ -175,7 +175,7 @@ def compute(metadata, solver_file_override=None):
             sys.path.insert(0, path)
             solver_file = file_name
 
-        submission = output(problem.input_file, solver_file)
+        submission = output(problem.input_file, problem.error_rate, problem.drop_rate, problem.max_round, solver_file)
         if submission != None:
             results[problem.id] = {'output':submission}
 
@@ -190,7 +190,7 @@ def load_input_data(file_location):
     return input_data
 
 
-def output(input_file, solver_file):
+def output(input_file, error_rate, drop_rate, max_round, solver_file):
     '''
     Attempts to execute solve_it locally on a given input file.
 
@@ -216,7 +216,7 @@ def output(input_file, solver_file):
 
     start = time.clock()
     try:
-        solution = pkg.solve_it(load_input_data(input_file))
+        solution = pkg.solve_it(load_input_data(input_file), error_rate, drop_rate, max_round)
     except Exception as e:
         print('the solve_it(input_data) method from solver.py raised an exception')
         print('try testing it with python ./solver.py before running this submission script')
@@ -238,13 +238,13 @@ def output(input_file, solver_file):
 
 def login_dialog(assignment_key, results, credentials_file_location = '_credentials'):
     '''
-    Requests Coursera login credentials from the student and submits the 
+    Requests Coursera login credentials from the student and submits the
     student's solutions for grading
 
     Args:
         assignment_key: Coursera's assignment key
         results: a dictionary of results in Cousera's format
-        credentials_file_location: a file location where login credentials can 
+        credentials_file_location: a file location where login credentials can
             be found
     '''
 
@@ -253,7 +253,7 @@ def login_dialog(assignment_key, results, credentials_file_location = '_credenti
 
     while not success:
 
-        # stops infinate loop when credentials file is incorrect 
+        # stops infinate loop when credentials file is incorrect
         if tries <= 0:
             login, token = login_prompt(credentials_file_location)
         else:
@@ -264,7 +264,7 @@ def login_dialog(assignment_key, results, credentials_file_location = '_credenti
         print('\n== Coursera Responce ...')
         #print(code)
         print(responce)
-        
+
         if code != 401:
             success = True
         else:
@@ -277,7 +277,7 @@ def login_prompt(credentials_file_location):
     Returns:
         the user's login and token
     '''
-    
+
     if os.path.isfile(credentials_file_location):
         try:
             with open(credentials_file_location, 'r') as metadata_file:
@@ -293,7 +293,7 @@ def login_prompt(credentials_file_location):
 
 def basic_prompt():
     '''
-    Prompt the user for login credentials. 
+    Prompt the user for login credentials.
     Returns:
         the user's login and token
     '''
@@ -304,7 +304,7 @@ def basic_prompt():
 
 def submit_solution(assignment_key, email_address, token, results):
     '''
-    Sends the student's submission to Coursera for grading via the submission 
+    Sends the student's submission to Coursera for grading via the submission
     API.
 
     Args:
@@ -318,14 +318,14 @@ def submit_solution(assignment_key, email_address, token, results):
     '''
 
     print('\n== Connecting to Coursera ...')
-    print('Submitting %d of %d parts' % 
+    print('Submitting %d of %d parts' %
         (sum(['output' in v for k,v in results.items()]), len(results)))
 
     # build json datastructure
     parts = {}
     submission = {
-        'assignmentKey': assignment_key,  
-        'submitterEmail': email_address,  
+        'assignmentKey': assignment_key,
+        'submitterEmail': email_address,
         'secret': token,
         'parts': results
     }
@@ -360,12 +360,12 @@ def submit_solution(assignment_key, email_address, token, results):
 
 def main(args):
     '''
-    1) Reads a metadata file to customize the submission process to 
-    a particular assignment.  
+    1) Reads a metadata file to customize the submission process to
+    a particular assignment.
     2) The compute the student's answers to the assignment parts.
     3) Submits the student's answers for grading.
 
-    Provides the an option for saving the submissions locally.  This is very 
+    Provides the an option for saving the submissions locally.  This is very
     helpful when testing the assignment graders.
 
     Args:
@@ -382,7 +382,7 @@ def main(args):
         metadata = load_metadata(args.metadata)
 
     print('==\n== '+metadata.name+' Solution Submission \n==')
-    
+
     # compute dialog
     results = compute(metadata, args.override)
 
@@ -424,27 +424,27 @@ def build_parser():
     '''
 
     parser = argparse.ArgumentParser(
-        description='''The submission script for Discrete Optimization 
+        description='''The submission script for Discrete Optimization
             assignments on the Coursera Platform.''',
-        epilog='''Please file bugs on github at: 
-        https://github.com/discreteoptimization/assignment/issues. If you 
-        would like to contribute to this tool's development, check it out at: 
+        epilog='''Please file bugs on github at:
+        https://github.com/discreteoptimization/assignment/issues. If you
+        would like to contribute to this tool's development, check it out at:
         https://github.com/discreteoptimization/assignment'''
     )
 
-    parser.add_argument('-v', '--version', action='version', 
+    parser.add_argument('-v', '--version', action='version',
         version='%(prog)s '+version)
 
-    parser.add_argument('-o', '--override', 
+    parser.add_argument('-o', '--override',
         help='overrides the python source file specified in the \'_coursera\' file')
 
-    parser.add_argument('-m', '--metadata', 
+    parser.add_argument('-m', '--metadata',
         help='overrides the \'_coursera\' metadata file')
 
-    parser.add_argument('-c', '--credentials', 
+    parser.add_argument('-c', '--credentials',
         help='overrides the \'_credentials\' credentials file')
 
-    parser.add_argument('-rs', '--record_submission', 
+    parser.add_argument('-rs', '--record_submission',
         help='records the submission(s) as files', action='store_true')
 
     return parser
