@@ -51,10 +51,11 @@ public:
     IntegerProgramming& operator=(IntegerProgramming&&) = delete;
 
 public:
-    void run();
+    std::pair<double, std::vector<int>> run();
 
 private:
-    void run(MPSolver::OptimizationProblemType solverType);
+    std::pair<double, std::vector<int>>
+    run(MPSolver::OptimizationProblemType solverType);
 
 private:
     int numFacility_;
@@ -88,25 +89,26 @@ IntegerProgramming::IntegerProgramming(const std::string& fileName) {
     }
 }
 
-void IntegerProgramming::run() {
+std::pair<double, std::vector<int>> IntegerProgramming::run() {
     #if defined(USE_GLPK)
-        run(MPSolver::GLPK_MIXED_INTEGER_PROGRAMMING);
+        return run(MPSolver::GLPK_MIXED_INTEGER_PROGRAMMING);
     #endif
     #if defined(USE_CBC)
-        run(MPSolver::CBC_MIXED_INTEGER_PROGRAMMING);
+        return run(MPSolver::CBC_MIXED_INTEGER_PROGRAMMING);
     #endif
     #if defined(USE_SCIP)
-        run(MPSolver::SCIP_MIXED_INTEGER_PROGRAMMING);
+        return run(MPSolver::SCIP_MIXED_INTEGER_PROGRAMMING);
     #endif
     #if defined(USE_GUROBI)
-        run(MPSolver::GUROBI_MIXED_INTEGER_PROGRAMMING);
+        return run(MPSolver::GUROBI_MIXED_INTEGER_PROGRAMMING);
     #endif
     #if defined(USE_CPLEX)
-        run(MPSolver::CPLEX_MIXED_INTEGER_PROGRAMMING);
+        return run(MPSolver::CPLEX_MIXED_INTEGER_PROGRAMMING);
     #endif
 }
 
-void IntegerProgramming::run(MPSolver::OptimizationProblemType solverType) {
+std::pair<double, std::vector<int>>
+IntegerProgramming::run(MPSolver::OptimizationProblemType solverType) {
 
     MPSolver solver("Facility", solverType);
 
@@ -137,6 +139,7 @@ void IntegerProgramming::run(MPSolver::OptimizationProblemType solverType) {
         openF[i] = solver.MakeIntVar(0, 1, tag);
     }
 
+
     // Prepare MIP optimal objective function.
     MPObjective* optima = solver.MutableObjective();
     for (int i = 0 ; i < numFacility_ ; ++i) {
@@ -152,20 +155,31 @@ void IntegerProgramming::run(MPSolver::OptimizationProblemType solverType) {
     // Prepare MIP constraints.
     double infinity = solver.infinity();
 
-    std::vector<std::vector<MPConstraint*>> openRelation(numClient_);
+    std::vector<MPConstraint*> openRelation(numFacility_);
+    for (int i = 0 ; i < numFacility_ ; ++i) {
+        auto constraint = solver.MakeRowConstraint(-infinity, 0);
+        for (int j = 0 ; j < numClient_ ; ++j) {
+            constraint->SetCoefficient(assignCToF[j][i], 1);
+        }
+        constraint->SetCoefficient(openF[i], -numClient_);
+        openRelation[i] = constraint;
+    }
+
+    /*
     for (int i = 0 ; i < numClient_ ; ++i) {
-        for (int j = 0 ; i < numFacility_ ; ++j) {
+        for (int j = 0 ; j < numFacility_ ; ++j) {
             auto constraint = solver.MakeRowConstraint(-infinity, 0);
             constraint->SetCoefficient(assignCToF[i][j], 1);
             constraint->SetCoefficient(openF[j], -1);
             openRelation[i].push_back(constraint);
         }
     }
+    */
 
     std::vector<MPConstraint*> assignment(numClient_);
     for (int i = 0 ; i < numClient_ ; ++i) {
         auto constraint = solver.MakeRowConstraint(1, 1);
-        for (int j = 0 ; i < numFacility_ ; ++j) {
+        for (int j = 0 ; j < numFacility_ ; ++j) {
             constraint->SetCoefficient(assignCToF[i][j], 1);
         }
         assignment[i] = constraint;
@@ -181,8 +195,19 @@ void IntegerProgramming::run(MPSolver::OptimizationProblemType solverType) {
         capacity[i] = constraint;
     }
 
-    //auto result = solver.Solve();
-    //std::cout << optima->Value() << std::endl;
+    auto result = solver.Solve();
+
+    std::vector<int> sequence;
+    for (int i = 0 ; i < numClient_ ; ++i) {
+        for (int j = 0 ; j < numFacility_ ; ++j) {
+            if (assignCToF[i][j]->solution_value() == 1) {
+                sequence.push_back(j);
+                break;
+            }
+        }
+    }
+
+    return std::make_pair(optima->Value(), std::move(sequence));
 }
 
 
@@ -196,7 +221,12 @@ int main(int argc, char** argv) {
     std::string fileName(argv[1]);
     IntegerProgramming solver(fileName);
 
-    solver.run();
+    auto ans = solver.run();
+    std::cout << std::setprecision(10) << ans.first << " 0" << std::endl;
+    for (auto num : ans.second) {
+        std::cout << num << ' ';
+    }
+    std::cout << std::endl;
 
     return 0;
 }
