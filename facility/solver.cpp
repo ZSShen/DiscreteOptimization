@@ -41,7 +41,7 @@ struct Client {
 
 class IntegerProgramming {
 public:
-    IntegerProgramming(const std::string& fileName);
+    IntegerProgramming(const std::string& fileName, int timeLimit);
     ~IntegerProgramming() = default;
 
     IntegerProgramming(const IntegerProgramming&) = delete;
@@ -61,12 +61,16 @@ private:
     int numFacility_;
     int numClient_;
 
+    int limitMins_;
+
     std::vector<Facility> facilities_;
     std::vector<Client> clients_;
 };
 
 
-IntegerProgramming::IntegerProgramming(const std::string& fileName) {
+IntegerProgramming::IntegerProgramming(
+    const std::string& fileName, int timeLimit)
+        :   limitMins_(timeLimit) {
 
     std::ifstream input(fileName);
     input >> numFacility_ >> numClient_;
@@ -111,6 +115,7 @@ std::pair<double, std::vector<int>>
 IntegerProgramming::run(MPSolver::OptimizationProblemType solverType) {
 
     MPSolver solver("Facility", solverType);
+    solver.set_time_limit(1000 * 60 * limitMins_);
 
     // Prepare MIP constants.
     std::vector<std::vector<double>> transportCToF(numClient_);
@@ -139,7 +144,6 @@ IntegerProgramming::run(MPSolver::OptimizationProblemType solverType) {
         openF[i] = solver.MakeIntVar(0, 1, tag);
     }
 
-
     // Prepare MIP optimal objective function.
     MPObjective* optima = solver.MutableObjective();
     for (int i = 0 ; i < numFacility_ ; ++i) {
@@ -166,6 +170,7 @@ IntegerProgramming::run(MPSolver::OptimizationProblemType solverType) {
     }
 
     /*
+    std::vector<std::vector<MPConstraint*>> openRelation(numClient_);
     for (int i = 0 ; i < numClient_ ; ++i) {
         for (int j = 0 ; j < numFacility_ ; ++j) {
             auto constraint = solver.MakeRowConstraint(-infinity, 0);
@@ -213,13 +218,17 @@ IntegerProgramming::run(MPSolver::OptimizationProblemType solverType) {
 
 int main(int argc, char** argv) {
 
-    if (argc != 2) {
-        std::cerr << "Please specify the input data path" << std::endl;
+    if (argc != 3) {
+        std::cerr << "Please specify: "
+                     "INPUT_PATH, "
+                     "TIME_LIMIT_IN_MINUTES" << std::endl;
         return -1;
     }
 
     std::string fileName(argv[1]);
-    IntegerProgramming solver(fileName);
+    int timeLimit(atoi(argv[2]));
+
+    IntegerProgramming solver(fileName, timeLimit);
 
     auto ans = solver.run();
     std::cout << std::setprecision(10) << ans.first << " 0" << std::endl;
